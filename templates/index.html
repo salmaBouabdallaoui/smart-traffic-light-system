@@ -1,0 +1,578 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <i data-lucide="traffic-cone" class="h-8 w-8 text-blue-600 mr-3"></i>
+                    <h1 class="text-xl font-semibold text-gray-900">Smart Traffic Light System</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center">
+                        <span class="text-sm text-gray-600 mr-2">MQTT:</span>
+                        <span id="mqtt-status" class="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">Connecting...</span>
+                    </div>
+                    <div class="flex items-center">
+                        <label for="auto-mode-toggle" class="text-sm text-gray-600 mr-2">Auto Mode:</label>
+                        <input type="checkbox" id="auto-mode-toggle" class="rounded" onchange="toggleAutoMode()" checked>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Emergency Alert -->
+    <div id="emergency-alert" class="bg-red-600 text-white p-4 emergency-alert" style="display: none;">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <i data-lucide="alert-triangle" class="h-5 w-5 mr-2"></i>
+                    <span class="font-medium">Emergency Vehicle Detected</span>
+                    <span class="ml-2 text-red-200">Traffic lights are being adjusted to prioritize emergency vehicle passage.</span>
+                </div>
+                <button onclick="clearEmergency()" class="text-red-200 hover:text-white">
+                    <i data-lucide="x" class="h-5 w-5"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Total Vehicles</p>
+                        <p class="text-2xl font-bold text-gray-900">1,284</p>
+                        <p class="text-xs text-gray-500">+12% from last hour</p>
+                    </div>
+                    <i data-lucide="car" class="h-8 w-8 text-blue-600"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Pedestrian Requests</p>
+                        <p class="text-2xl font-bold text-gray-900">24</p>
+                        <p class="text-xs text-gray-500">+2 in last 10 minutes</p>
+                    </div>
+                    <i data-lucide="users" class="h-8 w-8 text-green-600"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Violations</p>
+                        <p class="text-2xl font-bold text-gray-900">6</p>
+                        <p class="text-xs text-gray-500">+1 from yesterday</p>
+                    </div>
+                    <i data-lucide="alert-triangle" class="h-8 w-8 text-red-600"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">System Status</p>
+                        <p class="text-2xl font-bold text-gray-900">Online</p>
+                        <p class="text-xs text-gray-500">All systems operational</p>
+                    </div>
+                    <i data-lucide="activity" class="h-8 w-8 text-green-600"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                    <button onclick="showTab('dashboard')" class="tab-button active border-blue-500 text-blue-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        <i data-lucide="layout-dashboard" class="h-4 w-4 inline mr-2"></i>
+                        Dashboard
+                    </button>
+                    <button onclick="showTab('control')" class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        <i data-lucide="sliders" class="h-4 w-4 inline mr-2"></i>
+                        Control
+                    </button>
+                    <button onclick="showTab('camera')" class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        <i data-lucide="camera" class="h-4 w-4 inline mr-2"></i>
+                        Camera
+                    </button>
+                    <button onclick="showTab('violations')" class="tab-button border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        <i data-lucide="file-text" class="h-4 w-4 inline mr-2"></i>
+                        Violations
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="p-6">
+                <!-- Dashboard Tab -->
+                <div id="dashboard-tab" class="tab-content">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
+                        <!-- Zone A -->
+                        <div class="zone-card bg-gray-50 rounded-lg p-4">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Zone A</h3>
+                            <div class="flex justify-between items-center">
+                                <div class="text-center">
+                                    <p class="text-xs text-gray-600 mb-2">Vehicles</p>
+                                    <div class="flex flex-col space-y-1">
+                                        <div id="zoneA-red" class="traffic-light red mx-auto"></div>
+                                        <div id="zoneA-yellow" class="traffic-light off mx-auto"></div>
+                                        <div id="zoneA-green" class="traffic-light off mx-auto"></div>
+                                    </div>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-xs text-gray-600 mb-2">Pedestrians</p>
+                                    <div class="flex flex-col space-y-1">
+                                        <div id="zoneA-ped-red" class="traffic-light red mx-auto"></div>
+                                        <div id="zoneA-ped-green" class="traffic-light off mx-auto"></div>
+                                    </div>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-xs text-gray-600 mb-2">Countdown</p>
+                                    <p id="zoneA-countdown" class="text-lg font-bold text-gray-900">30s</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Zone B -->
+                        <div class="zone-card bg-gray-50 rounded-lg p-4">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Zone B</h3>
+                            <div class="flex justify-between items-center">
+                                <div class="text-center">
+                                    <p class="text-xs text-gray-600 mb-2">Vehicles</p>
+                                    <div class="flex flex-col space-y-1">
+                                        <div id="zoneB-red" class="traffic-light red mx-auto"></div>
+                                        <div id="zoneB-yellow" class="traffic-light off mx-auto"></div>
+                                        <div id="zoneB-green" class="traffic-light off mx-auto"></div>
+                                    </div>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-xs text-gray-600 mb-2">Pedestrians</p>
+                                    <div class="flex flex-col space-y-1">
+                                        <div id="zoneB-ped-red" class="traffic-light red mx-auto"></div>
+                                        <div id="zoneB-ped-green" class="traffic-light off mx-auto"></div>
+                                    </div>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-xs text-gray-600 mb-2">Countdown</p>
+                                    <p id="zoneB-countdown" class="text-lg font-bold text-gray-900">30s</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Zone C -->
+                        <div class="zone-card bg-gray-50 rounded-lg p-4">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Zone C</h3>
+                            <div class="flex justify-between items-center">
+                                <div class="text-center">
+                                    <p class="text-xs text-gray-600 mb-2">Vehicles</p>
+                                    <div class="flex flex-col space-y-1">
+                                        <div id="zoneC-red" class="traffic-light red mx-auto"></div>
+                                        <div id="zoneC-yellow" class="traffic-light off mx-auto"></div>
+                                        <div id="zoneC-green" class="traffic-light off mx-auto"></div>
+                                    </div>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-xs text-gray-600 mb-2">Pedestrians</p>
+                                    <div class="flex flex-col space-y-1">
+                                        <div id="zoneC-ped-red" class="traffic-light red mx-auto"></div>
+                                        <div id="zoneC-ped-green" class="traffic-light off mx-auto"></div>
+                                    </div>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-xs text-gray-600 mb-2">Countdown</p>
+                                    <p id="zoneC-countdown" class="text-lg font-bold text-gray-900">30s</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Zone D -->
+                        <div class="zone-card bg-gray-50 rounded-lg p-4">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Zone D</h3>
+                            <div class="flex justify-between items-center">
+                                <div class="text-center">
+                                    <p class="text-xs text-gray-600 mb-2">Vehicles</p>
+                                    <div class="flex flex-col space-y-1">
+                                        <div id="zoneD-red" class="traffic-light red mx-auto"></div>
+                                        <div id="zoneD-yellow" class="traffic-light off mx-auto"></div>
+                                        <div id="zoneD-green" class="traffic-light off mx-auto"></div>
+                                    </div>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-xs text-gray-600 mb-2">Pedestrians</p>
+                                    <div class="flex flex-col space-y-1">
+                                        <div id="zoneD-ped-red" class="traffic-light red mx-auto"></div>
+                                        <div id="zoneD-ped-green" class="traffic-light off mx-auto"></div>
+                                    </div>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-xs text-gray-600 mb-2">Countdown</p>
+                                    <p id="zoneD-countdown" class="text-lg font-bold text-gray-900">30s</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Control Tab -->
+                <div id="control-tab" class="tab-content hidden">
+                    <div class="mb-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Traffic Light Control</h3>
+                        <p class="text-sm text-gray-600 mb-6" id="control-description">
+                            System is in automatic mode. AI is optimizing traffic flow.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+                        <!-- Zone A Control -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="text-md font-medium text-gray-900 mb-4">Zone A Control</h4>
+                            <div class="space-y-2">
+                                <button onclick="changeTrafficLight('zoneA', 'red')" class="w-full bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded text-sm">
+                                    Set Red
+                                </button>
+                                <button onclick="changeTrafficLight('zoneA', 'yellow')" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-4 rounded text-sm">
+                                    Set Yellow
+                                </button>
+                                <button onclick="changeTrafficLight('zoneA', 'green')" class="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded text-sm">
+                                    Set Green
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Zone B Control -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="text-md font-medium text-gray-900 mb-4">Zone B Control</h4>
+                            <div class="space-y-2">
+                                <button onclick="changeTrafficLight('zoneB', 'red')" class="w-full bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded text-sm">
+                                    Set Red
+                                </button>
+                                <button onclick="changeTrafficLight('zoneB', 'yellow')" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-4 rounded text-sm">
+                                    Set Yellow
+                                </button>
+                                <button onclick="changeTrafficLight('zoneB', 'green')" class="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded text-sm">
+                                    Set Green
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Zone C Control -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="text-md font-medium text-gray-900 mb-4">Zone C Control</h4>
+                            <div class="space-y-2">
+                                <button onclick="changeTrafficLight('zoneC', 'red')" class="w-full bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded text-sm">
+                                    Set Red
+                                </button>
+                                <button onclick="changeTrafficLight('zoneC', 'yellow')" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-4 rounded text-sm">
+                                    Set Yellow
+                                </button>
+                                <button onclick="changeTrafficLight('zoneC', 'green')" class="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded text-sm">
+                                    Set Green
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Zone D Control -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="text-md font-medium text-gray-900 mb-4">Zone D Control</h4>
+                            <div class="space-y-2">
+                                <button onclick="changeTrafficLight('zoneD', 'red')" class="w-full bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded text-sm">
+                                    Set Red
+                                </button>
+                                <button onclick="changeTrafficLight('zoneD', 'yellow')" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-4 rounded text-sm">
+                                    Set Yellow
+                                </button>
+                                <button onclick="changeTrafficLight('zoneD', 'green')" class="w-full bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded text-sm">
+                                    Set Green
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Simulation Controls -->
+                    <div class="bg-gray-50 rounded-lg p-6">
+                        <h4 class="text-md font-medium text-gray-900 mb-4">Simulation Controls</h4>
+                        <div class="flex flex-wrap gap-4">
+                            <button onclick="requestPedestrianCrossing('zoneA')" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded text-sm">
+                                Simulate Pedestrian Request (Zone A)
+                            </button>
+                            <button onclick="triggerEmergency()" class="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded text-sm">
+                                Simulate Emergency Vehicle
+                            </button>
+                            <button onclick="requestPedestrianCrossing('zoneD')" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded text-sm">
+                                Simulate Visually Impaired Pedestrian
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Camera Tab -->
+                <div id="camera-tab" class="tab-content hidden">
+                    <div class="mb-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Live Camera Feed</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                            <!-- Lane Status Cards -->
+                            <div class="bg-white rounded-lg shadow p-4">
+                                <h4 class="text-md font-medium text-gray-900 mb-2">Lane 1</h4>
+                                <div class="space-y-2">
+                                    <p class="text-sm text-gray-600">Cars: <span id="lane1-cars" class="font-medium">0</span></p>
+                                    <p class="text-sm text-gray-600">Ambulances: <span id="lane1-ambulances" class="font-medium">0</span></p>
+                                    <p class="text-sm text-gray-600">Status: <span id="lane1-status" class="font-medium">Empty</span></p>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-4">
+                                <h4 class="text-md font-medium text-gray-900 mb-2">Lane 2</h4>
+                                <div class="space-y-2">
+                                    <p class="text-sm text-gray-600">Cars: <span id="lane2-cars" class="font-medium">0</span></p>
+                                    <p class="text-sm text-gray-600">Ambulances: <span id="lane2-ambulances" class="font-medium">0</span></p>
+                                    <p class="text-sm text-gray-600">Status: <span id="lane2-status" class="font-medium">Empty</span></p>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-4">
+                                <h4 class="text-md font-medium text-gray-900 mb-2">Lane 3</h4>
+                                <div class="space-y-2">
+                                    <p class="text-sm text-gray-600">Cars: <span id="lane3-cars" class="font-medium">0</span></p>
+                                    <p class="text-sm text-gray-600">Ambulances: <span id="lane3-ambulances" class="font-medium">0</span></p>
+                                    <p class="text-sm text-gray-600">Status: <span id="lane3-status" class="font-medium">Empty</span></p>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-4">
+                                <h4 class="text-md font-medium text-gray-900 mb-2">Lane 4</h4>
+                                <div class="space-y-2">
+                                    <p class="text-sm text-gray-600">Cars: <span id="lane4-cars" class="font-medium">0</span></p>
+                                    <p class="text-sm text-gray-600">Ambulances: <span id="lane4-ambulances" class="font-medium">0</span></p>
+                                    <p class="text-sm text-gray-600">Status: <span id="lane4-status" class="font-medium">Empty</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-black rounded-lg overflow-hidden relative" style="aspect-ratio: 16/9;">
+                        <img id="camera-video" src="{{ url_for('video_feed') }}" class="w-full h-full object-cover">
+                        <canvas id="detection-canvas" class="absolute top-0 left-0 w-full h-full pointer-events-none"></canvas>
+                        
+                        <!-- Camera Controls -->
+                        <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center space-x-2">
+                                    <button onclick="toggleCamera()" class="text-white hover:text-gray-300">
+                                        <i data-lucide="play" class="h-5 w-5"></i>
+                                    </button>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-white text-sm bg-black/50 px-2 py-1 rounded">Live</span>
+                                    <button onclick="toggleFullscreen()" class="text-white hover:text-gray-300">
+                                        <i data-lucide="maximize-2" class="h-5 w-5"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Violations Tab -->
+                <div id="violations-tab" class="tab-content hidden">
+                    <div class="mb-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Traffic Violations</h3>
+                        <div class="flex items-center space-x-4 mb-4">
+                            <div class="flex-1">
+                                <input type="text" id="violation-search" placeholder="Search by license plate, type, or location..." class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                            </div>
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded text-sm">
+                                <i data-lucide="download" class="h-4 w-4 inline mr-1"></i>
+                                Export
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg border overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">License Plate</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="violations-table-body" class="bg-white divide-y divide-gray-200">
+                                <!-- Violations will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    // Tab functionality
+    function showTab(tabName) {
+        // Hide all tab contents
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.add('hidden');
+        });
+        
+        // Remove active class from all tab buttons
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.classList.remove('active', 'border-blue-500', 'text-blue-600');
+            button.classList.add('border-transparent', 'text-gray-500');
+        });
+        
+        // Show selected tab content
+        document.getElementById(tabName + '-tab').classList.remove('hidden');
+        
+        // Add active class to selected tab button
+        event.target.classList.add('active', 'border-blue-500', 'text-blue-600');
+        event.target.classList.remove('border-transparent', 'text-gray-500');
+    }
+    
+    function toggleCamera() {
+        const video = document.getElementById('camera-video');
+        if (video.style.display === 'none') {
+            video.style.display = 'block';
+        } else {
+            video.style.display = 'none';
+        }
+    }
+    
+    function toggleFullscreen() {
+        const container = document.getElementById('camera-tab');
+        if (!document.fullscreenElement) {
+            container.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    }
+    
+    function clearEmergency() {
+        fetch('/api/emergency', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ active: false })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                emergencyActive = false;
+                updateEmergencyStatus();
+            }
+        });
+    }
+    
+    function addViolationToTable(violation) {
+        const tbody = document.getElementById('violations-table-body');
+        const row = document.createElement('tr');
+        
+        const statusClass = violation.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                           violation.status === 'reviewed' ? 'bg-green-100 text-green-800' :
+                           'bg-red-100 text-red-800';
+        
+        row.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${violation.timestamp}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <i data-lucide="alert-triangle" class="h-4 w-4 inline text-amber-500 mr-1"></i>
+                ${violation.type}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${violation.location}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${violation.licensePlate}</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <span class="px-2 py-1 text-xs rounded ${statusClass}">${violation.status}</span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <button onclick="updateViolationStatus('${violation.id}', 'reviewed')" class="text-green-600 hover:text-green-900 mr-2">Review</button>
+                <button onclick="updateViolationStatus('${violation.id}', 'dismissed')" class="text-red-600 hover:text-red-900 mr-2">Dismiss</button>
+                <button onclick="deleteViolation('${violation.id}')" class="text-red-600 hover:text-red-900">Delete</button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+        lucide.createIcons(); // Re-initialize icons
+    }
+    
+    function updateViolationStatus(violationId, status) {
+        fetch(`/api/violations/${violationId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ status: status })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(`Violation ${status}`, 'success');
+                // Update the table row
+                location.reload(); // Simple reload for now
+            }
+        });
+    }
+    
+    function deleteViolation(violationId) {
+        if (confirm('Are you sure you want to delete this violation?')) {
+            fetch(`/api/violations/${violationId}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Violation deleted', 'success');
+                    location.reload(); // Simple reload for now
+                }
+            });
+        }
+    }
+    
+    // Initialize icons when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        lucide.createIcons();
+        
+        // Update control description based on auto mode
+        function updateControlDescription() {
+            const description = document.getElementById('control-description');
+            if (description) {
+                description.textContent = autoMode ? 
+                    'System is in automatic mode. AI is optimizing traffic flow.' :
+                    'Manual control mode active. Use the controls below to manage traffic lights.';
+            }
+        }
+        
+        // Update description initially and when mode changes
+        updateControlDescription();
+        
+        // Override the mode update function to also update description
+        const originalModeUpdate = window.updateModeToggle;
+        window.updateModeToggle = function() {
+            if (originalModeUpdate) originalModeUpdate();
+            updateControlDescription();
+        };
+    });
+
+    // Add lane status update handler
+    socket.on('mqtt_message', function(data) {
+        if (data.topic === 'traffic/lanes/status') {
+            const lanes = data.payload.lanes;
+            for (const [lane, status] of Object.entries(lanes)) {
+                const laneNum = lane.slice(-1);
+                document.getElementById(`lane${laneNum}-cars`).textContent = status.cars;
+                document.getElementById(`lane${laneNum}-ambulances`).textContent = status.ambulances;
+                document.getElementById(`lane${laneNum}-status`).textContent = status.empty ? 'Empty' : 'Occupied';
+            }
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Smart Traffic Light System{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Socket.IO -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    
+    <!-- Chart.js for statistics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <style>
+        .traffic-light {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin: 2px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .traffic-light.red { background-color: #ef4444; }
+        .traffic-light.yellow { background-color: #eab308; }
+        .traffic-light.green { background-color: #22c55e; }
+        .traffic-light.off { background-color: #374151; }
+        
+        .zone-card {
+            transition: all 0.3s ease;
+        }
+        
+        .zone-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .emergency-alert {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .detection-box {
+            position: absolute;
+            border: 2px solid #22c55e;
+            background: rgba(34, 197, 94, 0.1);
+            pointer-events: none;
+        }
+        
+        .detection-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 2px 6px;
+            font-size: 12px;
+            border-radius: 3px;
+            top: -20px;
+            left: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    {% block content %}{% endblock %}
+    
+    <script>
+        // Initialize Socket.IO
+        const socket = io();
+        
+        // Global state
+        let trafficLights = {};
+        let emergencyActive = false;
+        let autoMode = true;
+        let mqttConnected = false;
+        let detections = [];
+        
+        // Socket event handlers
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
+        
+        socket.on('mqtt_status', function(data) {
+            mqttConnected = data.connected;
+            updateMqttStatus();
+        });
+        
+        socket.on('traffic_lights_update', function(data) {
+            trafficLights = data;
+            updateTrafficLights();
+        });
+        
+        socket.on('emergency_update', function(data) {
+            emergencyActive = data.detected;
+            updateEmergencyStatus();
+        });
+        
+        socket.on('detection_update', function(data) {
+            detections = data.detections;
+            updateDetections();
+        });
+        
+        socket.on('violation_update', function(data) {
+            addViolationToTable(data);
+        });
+        
+        socket.on('pedestrian_request', function(data) {
+            showNotification(`Pedestrian request at ${data.zone}`, 'info');
+        });
+        
+        socket.on('mode_update', function(data) {
+            autoMode = data.autoMode;
+            updateModeToggle();
+        });
+        
+        // Utility functions
+        function updateMqttStatus() {
+            const statusElement = document.getElementById('mqtt-status');
+            if (statusElement) {
+                statusElement.className = mqttConnected ? 
+                    'px-2 py-1 text-xs rounded bg-green-100 text-green-800' : 
+                    'px-2 py-1 text-xs rounded bg-red-100 text-red-800';
+                statusElement.textContent = mqttConnected ? 'Connected' : 'Disconnected';
+            }
+        }
+        
+        function updateTrafficLights() {
+            Object.keys(trafficLights).forEach(zone => {
+                const light = trafficLights[zone];
+                updateZoneLight(zone, light.state, light.pedestrianState, light.countdown);
+            });
+        }
+        
+        function updateZoneLight(zone, state, pedestrianState, countdown) {
+            // Update vehicle lights
+            ['red', 'yellow', 'green'].forEach(color => {
+                const element = document.getElementById(`${zone}-${color}`);
+                if (element) {
+                    element.className = `traffic-light ${state === color ? color : 'off'}`;
+                }
+            });
+            
+            // Update pedestrian lights
+            ['red', 'green'].forEach(color => {
+                const element = document.getElementById(`${zone}-ped-${color}`);
+                if (element) {
+                    element.className = `traffic-light ${pedestrianState === color ? color : 'off'}`;
+                }
+            });
+            
+            // Update countdown
+            const countdownElement = document.getElementById(`${zone}-countdown`);
+            if (countdownElement) {
+                countdownElement.textContent = `${countdown}s`;
+            }
+        }
+        
+        function updateEmergencyStatus() {
+            const alertElement = document.getElementById('emergency-alert');
+            if (alertElement) {
+                alertElement.style.display = emergencyActive ? 'block' : 'none';
+            }
+        }
+        
+        function updateModeToggle() {
+            const toggleElement = document.getElementById('auto-mode-toggle');
+            if (toggleElement) {
+                toggleElement.checked = autoMode;
+            }
+        }
+        
+        function updateDetections() {
+            const canvas = document.getElementById('detection-canvas');
+            const video = document.getElementById('camera-video');
+            
+            if (canvas && video) {
+                const ctx = canvas.getContext('2d');
+                canvas.width = video.videoWidth || 800;
+                canvas.height = video.videoHeight || 400;
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw detections
+                detections.forEach(detection => {
+                    const x = (detection.x / 800) * canvas.width;
+                    const y = (detection.y / 400) * canvas.height;
+                    const width = (detection.width / 800) * canvas.width;
+                    const height = (detection.height / 400) * canvas.height;
+                    
+                    // Draw bounding box
+                    ctx.strokeStyle = '#22c55e';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x, y, width, height);
+                    
+                    // Draw label
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                    const label = `${detection.label} (${Math.round(detection.confidence * 100)}%)`;
+                    const textWidth = ctx.measureText(label).width;
+                    ctx.fillRect(x, y - 20, textWidth + 10, 20);
+                    
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = '12px Arial';
+                    ctx.fillText(label, x + 5, y - 5);
+                });
+            }
+        }
+        
+        function showNotification(message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
+                type === 'error' ? 'bg-red-500 text-white' :
+                type === 'success' ? 'bg-green-500 text-white' :
+                'bg-blue-500 text-white'
+            }`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+        
+        // API functions
+        function changeTrafficLight(zone, state) {
+            fetch('/api/traffic-lights', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ zone: zone, state: state })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    showNotification('Failed to change traffic light', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showNotification('Network error', 'error');
+            });
+        }
+        
+        function toggleAutoMode() {
+            const newMode = !autoMode;
+            fetch('/api/mode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ auto: newMode })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    autoMode = data.autoMode;
+                    updateModeToggle();
+                    showNotification(`Switched to ${autoMode ? 'automatic' : 'manual'} mode`, 'success');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showNotification('Failed to toggle mode', 'error');
+            });
+        }
+        
+        function triggerEmergency() {
+            fetch('/api/emergency', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ active: true, location: 'zoneA' })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Emergency vehicle simulation activated', 'success');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showNotification('Failed to trigger emergency', 'error');
+            });
+        }
+        
+        function requestPedestrianCrossing(zone) {
+            fetch('/api/pedestrian-request', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ zone: zone })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(`Pedestrian crossing requested for ${zone}`, 'success');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showNotification('Failed to request crossing', 'error');
+            });
+        }
+    </script>
+</body>
+</html>

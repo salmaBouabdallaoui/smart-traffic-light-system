@@ -1,0 +1,8 @@
+Flask==2.3.3
+Flask-SocketIO==5.3.6
+paho-mqtt>=2.0.0
+python-socketio==5.8.0
+eventlet==0.33.3
+opencv-python>=4.8.0
+ultralytics>=8.0.0
+numpy>=1.24.0
