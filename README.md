@@ -2,7 +2,6 @@
 
 💡 **Projet de Stage** : Optimisation du Trafic Urbain et Sécurité Routière pour la Smart City
 
-> *(Remplacez ce texte par un schéma de votre architecture système ou une photo de votre maquette. Vous pouvez créer un dossier `docs` pour vos images.)*
 
 ---
 
